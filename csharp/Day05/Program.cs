@@ -1,6 +1,10 @@
-﻿var lines = File.ReadAllLines("sample.txt");
+﻿using System.Diagnostics;
 
-Part1();
+var lines = File.ReadAllLines("input.txt");
+
+var watcher = Stopwatch.StartNew();
+Part2();
+Console.WriteLine(watcher.Elapsed.TotalMilliseconds);
 
 void Part1()
 {
@@ -15,7 +19,6 @@ void Part1()
         {
             current = line.Split(' ').First().Split('-').Last();
             maps.Add(current, []);
-            Console.WriteLine(current);
         }
         else
         {
@@ -23,77 +26,107 @@ void Part1()
             maps[current].Add(new Map(Convert.ToInt64(parts[0]), Convert.ToInt64(parts[1]), Convert.ToInt64(parts[2])));
         }
     }
-    Console.WriteLine("#1");
-    var locationValues = new List<long>();
+
+    var locationValue = long.MaxValue;
     
     foreach (var seed in seeds)
     {
-        Console.WriteLine($"seed {seed}");
-       
-        long lastSeed = seed;
+        var lastSeed = seed;
         foreach (var map in maps)
         {
-            var mapMatch = false;
             foreach (var m in map.Value)
             {
-                if (m.TryGetSeedMap(lastSeed, out var value))
+                if (!m.TryGetSeedMap(lastSeed, out var value))
                 {
-                    lastSeed = value;
-                    Console.WriteLine($"\t{map.Key} : {value}");
-                    mapMatch = true;
-                    if (map.Key == "location")
+                    continue;
+                }
+
+                lastSeed = value;
+                break;
+            }
+
+            //Console.WriteLine($"\t{map.Key} : {lastSeed}");
+            if (!map.Key.Equals("location"))
+            {
+                continue;
+            }
+
+            locationValue = Math.Min(locationValue, lastSeed);
+            break;
+        }
+    }
+    
+    Console.WriteLine($"Part 1 {locationValue}");
+}
+
+void Part2()
+{
+    var seeds = lines.First().Split(':').Last().Split(' ', StringSplitOptions.RemoveEmptyEntries)
+        .Select(s => Convert.ToInt64(s))
+        .ToList();
+    
+    var maps = new Dictionary<string, List<Map>>();
+    var current = "";
+    foreach (var line in lines.Skip(1).Where( l => !string.IsNullOrEmpty(l)))
+    {
+        if (line.Contains("map"))
+        {
+            current = line.Split(' ').First().Split('-').Last();
+            maps.Add(current, []);
+        }
+        else
+        {
+            var parts = line.Split(" ");
+            maps[current].Add(new Map(Convert.ToInt64(parts[0]), Convert.ToInt64(parts[1]), Convert.ToInt64(parts[2])));
+        }
+    }
+    var locationValue = long.MaxValue;
+
+    for (var i = 0; i < seeds.Count; i += 2)
+    {
+        var start = seeds[i];
+        var max = start + seeds[i + 1];
+        Console.WriteLine( start) ;
+        Parallel.For(start, max,  seed =>
+        {
+            var lastSeed = seed;
+            foreach (var map in maps)
+            {
+                foreach (var m in map.Value)
+                {
+                    if (!m.TryGetSeedMap(lastSeed, out var value))
                     {
-                        locationValues.Add(value);
+                        continue;
                     }
+
+                    lastSeed = value;
+                    break;
+                }
+                
+                if (map.Key.Equals("location") && locationValue > lastSeed)
+                {
+                    Interlocked.Exchange(ref locationValue, lastSeed);
                     break;
                 }
             }
-    
-            if (mapMatch == false)
-            {
-                Console.WriteLine($"\t{map.Key} : {lastSeed}");
-                if (map.Key == "location")
-                {
-                    locationValues.Add(lastSeed);
-                }
-            }
-        }
+        });
     }
-    
-    Console.WriteLine($"Part 1 {locationValues.Min()}");
+    Console.WriteLine($"Part 2 {locationValue}");
 }
 
-
-
-
-
-internal class Map(long dest, long src, long range)
+internal readonly struct Map(long dest, long src, long range)
 {
-    private readonly IEnumerable<long> _seedValues = Toto(src, range);
-    private readonly IEnumerable<long> _categoryValues =Toto(dest, range).ToList();
-
+    private readonly long _max = src + range  ;
+    private readonly long _delta = dest - src;
     public bool TryGetSeedMap(long seed, out long value)
     {
         value = 0;
-        var found = false;
-        var index = _seedValues.Select((value, index) => new { seed = value, index}).FirstOrDefault( value => value.seed == seed)?.index;
-        if (!index.HasValue)
+        if (seed < src || seed > _max)
         {
-            return found;
+            return false;
         }
 
-        found = true;
-        value = _categoryValues.ToArray()[index.Value];
-        return found;
+        value = seed + _delta;
+        return true;
     }
-    
-    static IEnumerable<long> Toto(long start, long count)
-    {
-        for (var i = start; i < start + count; i++)
-        {
-            yield return i;
-        }
-    }
-
 }
-
